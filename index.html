@@ -497,6 +497,10 @@
           <h3>2. What Flows Through the Pipe</h3>
           <p>Attackers send commands such as whoami, ls, or shell invocations down the socket. The compromised system then sends stdout, stderr, terminal output, and command results back through the same channel. The initiation direction and the traffic direction are not the same thing.</p>
         </div>
+        <div class="concept-card">
+          <h3>3. Denial of Resource Attack on the Listener</h3>
+          <p>When a C2 listener is flooded with junk output, repeated reconnect churn, or oversized write bursts, its CPU, memory, and file descriptor pools can be exhausted. This is a denial-of-resource condition: the listener degrades, stalls, or crashes under pressure even though the connection itself is still technically open.</p>
+        </div>
       </div>
 
       <div class="legal-box">
