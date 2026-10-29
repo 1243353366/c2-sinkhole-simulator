@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Security Architecture Pipeline Visualizer</title>
+  <style>
+    :root {
+      --bg: #020817;
+      --bg-soft: #0f172a;
+      --panel: #111827;
+      --panel-alt: #0b1220;
+      --border: #334155;
+      --primary: #38bdf8;
+      --secondary: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --shadow: rgba(15, 23, 42, 0.8);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      background: radial-gradient(circle at top, #0f172a 0%, var(--bg) 50%);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.5;
+    }
+
+    body {
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding: 18px 20px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+
+    .title-wrap h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 2vw, 2.5rem);
+      letter-spacing: 0.04em;
+      color: #f8fafc;
+    }
+
+    .title-wrap p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    .status-pill {
+      border: 1px solid rgba(52, 211, 153, 0.5);
+      background: rgba(52, 211, 153, 0.12);
+      color: var(--success);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 22px;
+      margin-bottom: 22px;
+    }
+
+    .panel {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 1.1rem;
+      color: #f8fafc;
+      letter-spacing: 0.04em;
+    }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 14px;
+      margin-top: 10px;
+    }
+
+    .node {
+      min-height: 120px;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.95));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.25s ease;
+    }
+
+    .node::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(167, 139, 250, 0.03));
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .node.active::before,
+    .node.warning::before,
+    .node.success::before,
+    .node.danger::before {
+      opacity: 1;
+    }
+
+    .node.active {
+      border-color: rgba(56, 189, 248, 0.8);
+      box-shadow: inset 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+
+    .node.warning {
+      border-color: rgba(251, 191, 36, 0.7);
+      box-shadow: inset 0 0 10px rgba(251, 191, 36, 0.12);
+    }
+
+    .node.success {
+      border-color: rgba(52, 211, 153, 0.7);
+      box-shadow: inset 0 0 10px rgba(52, 211, 153, 0.12);
+    }
+
+    .node.danger {
+      border-color: rgba(248, 113, 113, 0.75);
+      box-shadow: inset 0 0 10px rgba(248, 113, 113, 0.12);
+    }
+
+    .node > * { position: relative; z-index: 1; }
+
+    .node-badge {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .node-title {
+      font-weight: 700;
+      font-size: 1.04rem;
+      margin: 6px 0 4px;
+    }
+
+    .node-status {
+      font-size: 0.76rem;
+      color: var(--primary);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .node.warning .node-status { color: var(--warning); }
+    .node.success .node-status { color: var(--success); }
+    .node.danger .node-status { color: var(--danger); }
+
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: white;
+      font-weight: 700;
+      font-size: 0.82rem;
+      background: linear-gradient(180deg, #3b82f6, #2563eb);
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+
+    button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+
+    .attack-btn { background: linear-gradient(180deg, #ef4444, #dc2626); }
+    .flood-btn { background: linear-gradient(180deg, #f59e0b, #d97706); color: #1f2937; }
+    .defense-btn { background: linear-gradient(180deg, #10b981, #059669); }
+    .tarpit-btn { background: linear-gradient(180deg, #8b5cf6, #7c3aed); }
+    .deny-btn { background: linear-gradient(180deg, #64748b, #475569); }
+    .reset-btn { background: linear-gradient(180deg, #1f2937, #111827); }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .metric {
+      background: rgba(2, 6, 23, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: clamp(1.2rem, 2vw, 2rem);
+      font-weight: 800;
+      margin-top: 8px;
+      color: var(--primary);
+    }
+
+    .chart-wrap {
+      position: relative;
+      margin-top: 16px;
+      background: rgba(2, 6, 23, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 230px;
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.9));
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 22px;
+      margin-bottom: 22px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 0.86rem;
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.9);
+      color: #f8fafc;
+    }
+
+    td.status {
+      font-weight: 700;
+    }
+
+    .status-idle { color: var(--muted); }
+    .status-attack { color: var(--danger); }
+    .status-flood { color: var(--warning); }
+    .status-sinkhole { color: var(--success); }
+    .status-tarpit { color: #c4b5fd; }
+    .status-block { color: #fca5a5; }
+
+    .terminal {
+      background: rgba(2, 6, 23, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      height: 260px;
+      overflow-y: auto;
+      color: #7dd3fc;
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .terminal-line { display: block; }
+    .terminal-line.warn { color: #fbbf24; }
+    .terminal-line.alert { color: #fca5a5; }
+    .terminal-line.ok { color: #6ee7b7; }
+    .terminal-line.info { color: #7dd3fc; }
+
+    .reference-section {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .ref-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 16px;
+    }
+
+    .ref-card h3 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      color: #f8fafc;
+    }
+
+    .ref-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.91rem;
+    }
+
+    .legal-box {
+      margin-top: 18px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      border-left: 4px solid var(--danger);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .legal-box h3 {
+      margin: 0 0 12px;
+      color: #f8fafc;
+    }
+
+    .legal-box p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    @media (max-width: 980px) {
+      .grid, .two-col {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .pipeline { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .metrics-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>Security Architecture Pipeline Visualizer</h1>
+        <p>Interactive lifecycle model: malicious backdoor → reverse shell → resource flood → DNS sinkhole → TCP zero-window tarpits</p>
+      </div>
+      <div class="status-pill" id="globalStatus">STANDBY</div>
+    </header>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Architecture Pipeline</h2>
+        <div class="pipeline" id="pipeline">
+          <div class="node">
+            <div class="node-badge">Stage 01</div>
+            <div class="node-title">Backdoor</div>
+            <div class="node-status">IDLE</div>
+          </div>
+          <div class="node">
+            <div class="node-badge">Stage 02</div>
+            <div class="node-title">Shell</div>
+            <div class="node-status">IDLE</div>
+          </div>
+          <div class="node">
+            <div class="node-badge">Stage 03</div>
+            <div class="node-title">Flood</div>
+            <div class="node-status">IDLE</div>
+          </div>
+          <div class="node">
+            <div class="node-badge">Stage 04</div>
+            <div class="node-title">Tarpit</div>
+            <div class="node-status">IDLE</div>
+          </div>
+        </div>
+
+        <div class="control-grid" style="margin-top: 20px;">
+          <button class="attack-btn" onclick="triggerBackdoor()">Execute Backdoor</button>
+          <button class="attack-btn" onclick="triggerReverseShell()">Open Reverse Shell</button>
+          <button class="flood-btn" onclick="triggerDataFlood()">Resource Flood</button>
+          <button class="defense-btn" onclick="triggerSinkhole()">Deploy Sinkhole</button>
+          <button class="tarpit-btn" onclick="triggerTarpit()">TCP Tarpit</button>
+          <button class="deny-btn" onclick="triggerScriptDeny()">Deny Malicious Script</button>
+          <button class="reset-btn" onclick="resetAll()">Reset Pipeline</button>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h2>Telemetry</h2>
+        <div class="metrics-grid">
+          <div class="metric">
+            <div class="metric-label">State</div>
+            <div class="metric-value" id="stateValue">IDLE</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">C2 CPU</div>
+            <div class="metric-value" id="cpuValue">0%</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Buffer</div>
+            <div class="metric-value" id="bufferValue">0 KB</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Window</div>
+            <div class="metric-value" id="windowValue">65535</div>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="resourceChart" width="440" height="220"></canvas>
+        </div>
+      </aside>
+    </div>
+
+    <div class="two-col">
+      <section class="panel">
+        <h2>Active Socket State Table</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Phase</th>
+              <th>Source</th>
+              <th>Destination</th>
+              <th>Action</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="socketTable">
+            <tr>
+              <td colspan="5" style="text-align:center; color: #94a3b8;">No activity — pipeline awaiting execution.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>System Log</h2>
+        <div class="terminal" id="terminal">
+          <span class="terminal-line info">[system] Pipeline ready. Select an operation to begin the simulation.</span>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Security Reference</h2>
+      <div class="reference-section">
+        <div class="ref-card">
+          <h3>TCP Window Clamping</h3>
+          <p>Zero-window clamping reduces the receive window to zero, forcing remote senders to pause transmission. The effect creates a controlled throttle lane and prevents aggressive data bursts from overwhelming inbound buffers or downstream defenders.</p>
+        </div>
+        <div class="ref-card">
+          <h3>Thread Starvation</h3>
+          <p>Continuous flood traffic can monopolize worker threads and CPU cycles. When the attacker exhausts the listener, defenders can reallocate resources, isolate sessions, and insert controlled choke points that deprioritize malicious traffic.</p>
+        </div>
+        <div class="ref-card">
+          <h3>DNS Sinkholing</h3>
+          <p>Malicious infrastructure is redirected to a controlled destination such as a loopback or legal monitoring appliance. This prevents the requested host from resolving to attacker-owned infrastructure while preserving operational visibility and evidence handling.</p>
+        </div>
+        <div class="ref-card">
+          <h3>Backdoor Denial</h3>
+          <p>For defensive architecture, signed script restrictions, deterministic allowlists, and runtime detonation controls can deny script execution from malicious domains, tampered browser extensions, or unauthorized persistence paths before they reach an active process.</p>
+        </div>
+      </div>
+
+      <div class="legal-box">
+        <h3>Operational & Legal Context</h3>
+        <p>This simulator is an educational model for defensive network engineering and threat analysis. It illustrates how controlled redirection, rate limiting, and zero-window tactics are used to contain malicious traffic. It does not provide instructions for unauthorized intrusion or destructive exploitation. Any real-world security work must comply with local law, internal policy, organizational authorization, and the Computer Fraud and Abuse Act (CFAA) and related regulations.</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const terminal = document.getElementById('terminal');
+    const globalStatus = document.getElementById('globalStatus');
+    const stateValue = document.getElementById('stateValue');
+    const cpuValue = document.getElementById('cpuValue');
+    const bufferValue = document.getElementById('bufferValue');
+    const windowValue = document.getElementById('windowValue');
+    const socketTable = document.getElementById('socketTable');
+    const nodes = [...document.querySelectorAll('.node')];
+    const canvas = document.getElementById('resourceChart');
+    const ctx = canvas.getContext('2d');
+
+    const attackerSeries = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const defenderSeries = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+    function addLog(message, type = 'info') {
+      const line = document.createElement('span');
+      line.className = `terminal-line ${type}`;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      terminal.appendChild(line);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function updateNodes(stage) {
+      nodes.forEach((node, index) => {
+        node.classList.remove('active', 'warning', 'success', 'danger');
+        const statusEl = node.querySelector('.node-status');
+        if (index === 0 && stage === 'backdoor') {
+          node.classList.add('active');
+          statusEl.textContent = 'ACTIVE';
+        } else if (index === 1 && stage === 'shell') {
+          node.classList.add('active');
+          statusEl.textContent = 'ESTABLISHED';
+        } else if (index === 2 && stage === 'flood') {
+          node.classList.add('warning');
+          statusEl.textContent = 'EXHAUSTED';
+        } else if (index === 3 && stage === 'tarpit') {
+          node.classList.add('success');
+          statusEl.textContent = 'LOCKED';
+        } else if (index === 3 && stage === 'sinkhole') {
+          node.classList.add('success');
+          statusEl.textContent = 'ROUTED';
+        } else if (index === 0 && stage === 'denied') {
+          node.classList.add('danger');
+          statusEl.textContent = 'DENIED';
+        } else {
+          statusEl.textContent = 'IDLE';
+        }
+      });
+    }
+
+    function setMetrics(state, cpu, buffer, windowSize) {
+      stateValue.textContent = state;
+      cpuValue.textContent = cpu;
+      bufferValue.textContent = buffer;
+      windowValue.textContent = String(windowSize);
+      globalStatus.textContent = state;
+    }
+
+    function drawChart() {
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(30, 15);
+      ctx.lineTo(30, height - 20);
+      ctx.lineTo(width - 15, height - 20);
+      ctx.stroke();
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('0%', 8, height - 18);
+      ctx.fillText('50%', 8, height / 2 + 8);
+      ctx.fillText('100%', 4, 22);
+
+      const makePath = (values, color) => {
+        ctx.beginPath();
+        values.forEach((val, i) => {
+          const x = 30 + (i * (width - 60)) / (values.length - 1);
+          const y = height - 20 - (val / 100) * (height - 40);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      };
+
+      makePath(attackerSeries, '#f87171');
+      makePath(defenderSeries, '#34d399');
+
+      ctx.fillStyle = '#f87171';
+      ctx.fillText('Attacker', width - 110, 22);
+      ctx.fillStyle = '#34d399';
+      ctx.fillText('Defender', width - 110, 40);
+    }
+
+    function pushChart(attacker, defender) {
+      attackerSeries.push(attacker);
+      defenderSeries.push(defender);
+      if (attackerSeries.length > 12) attackerSeries.shift();
+      if (defenderSeries.length > 12) defenderSeries.shift();
+      drawChart();
+    }
+
+    function updateSocket(rows) {
+      socketTable.innerHTML = rows.map(row => `
+        <tr>
+          <td>${row.phase}</td>
+          <td>${row.source}</td>
+          <td>${row.destination}</td>
+          <td>${row.action}</td>
+          <td class="status ${row.className}">${row.status}</td>
+        </tr>
+      `).join('');
+    }
+
+    function triggerBackdoor() {
+      setMetrics('COMPROMISED', '12%', '1.2 KB', 64240);
+      updateNodes('backdoor');
+      updateSocket([
+        { phase: 'Backdoor Drop', source: '192.168.1.150', destination: 'typo-arch-archive.com', action: 'Staged payload loaded', status: 'PAYLOAD_ACTIVE', className: 'status-attack' }
+      ]);
+      pushChart(12, 2);
+      addLog('Malicious script executed from a typosquatted domain. Backdoor persistence path established and queued for runtime evaluation.', 'alert');
+      addLog('System created a transient malicious browser script trigger targeting a remote payload staging endpoint.', 'warn');
+    }
+
+    function triggerReverseShell() {
+      setMetrics('ESTABLISHED', '28%', '4.5 KB', 64240);
+      updateNodes('shell');
+      updateSocket([
+        { phase: 'Reverse Shell', source: '192.168.1.150:54321', destination: '203.0.113.66:4444', action: 'TCP handshake /bin/sh', status: 'ESTABLISHED', className: 'status-attack' }
+      ]);
+      pushChart(28, 6);
+      addLog('Outbound TCP connection established to attacker C2 203.0.113.66:4444. Interactive command shell spawned.', 'alert');
+      addLog('Inbound session is active; remote operator now has a live control path.', 'warn');
+    }
+
+    function triggerDataFlood() {
+      setMetrics('FLOODING', '100% (CRITICAL)', '1.8 GB', 16384);
+      updateNodes('flood');
+      updateSocket([
+        { phase: 'Resource Attack', source: '192.168.1.150:54321', destination: '203.0.113.66:4444', action: 'Buffer saturation / random stream', status: 'LISTENER_EXHAUSTION', className: 'status-flood' }
+      ]);
+      pushChart(100, 18);
+      addLog('Continuous high-throughput stream injected into the listener. CPU pinning and queue pressure begin to overwhelm the service.', 'warn');
+      addLog('WARNING: Queue backlog exceeded safe limits; worker threads are now competing for scarce resources.', 'alert');
+    }
+
+    function triggerSinkhole() {
+      setMetrics('SINKHOLED', '2% SCALE', '0 KB', 65535);
+      updateNodes('sinkhole');
+      updateSocket([
+        { phase: 'DNS Defense', source: '192.168.1.150', destination: '127.0.0.1:9999', action: 'Redirection to sinkhole collector', status: 'SINKHOLED', className: 'status-sinkhole' }
+      ]);
+      pushChart(2, 42);
+      addLog('DNS sinkhole engaged. Domain resolution redirected to a controlled collector at 127.0.0.1.', 'ok');
+      addLog('Outbound malicious hostname is now non-functional; the attacker can no longer reach the intended infrastructure.', 'info');
+    }
+
+    function triggerTarpit() {
+      setMetrics('TARPIT_LOCKED', '0.1% (MIN)', '0 KB', 0);
+      updateNodes('tarpit');
+      updateSocket([
+        { phase: 'TCP Blackhole', source: '192.168.1.150:54321', destination: '203.0.113.66:4444', action: 'Zero-window clamp / LaBrea-style tarpitting', status: 'TARPIT_ACTIVE', className: 'status-tarpit' }
+      ]);
+      pushChart(1, 70);
+      addLog('TCP receive window set to zero. Remote endpoint is now effectively stalled in a controlled deadlock state.', 'ok');
+      addLog('Attacker connection remains open but remains harmlessly trapped with minimal resource cost to the defender.', 'info');
+    }
+
+    function triggerScriptDeny() {
+      setMetrics('SCRIPT DENIED', '0%', '0 KB', 65535);
+      updateNodes('denied');
+      updateSocket([
+        { phase: 'Control Policy', source: 'browser://script', destination: 'deny://malicious-domain', action: 'Runtime script block / allowlist enforcement', status: 'BLOCKED', className: 'status-block' }
+      ]);
+      pushChart(0, 85);
+      addLog('Runtime policy engine denied malicious script execution and prevented persistent backdoor activation.', 'ok');
+      addLog('A signed allowlist and script sandbox policy isolated the malicious payload before it could establish a foothold.', 'info');
+    }
+
+    function resetAll() {
+      setMetrics('IDLE', '0%', '0 KB', 65535);
+      updateNodes('idle');
+      updateSocket([
+        { phase: 'Ready', source: 'none', destination: 'none', action: 'Awaiting trigger', status: 'IDLE', className: 'status-idle' }
+      ]);
+      attackerSeries.length = 0;
+      defenderSeries.length = 0;
+      for (let i = 0; i < 12; i++) {
+        attackerSeries.push(0);
+        defenderSeries.push(0);
+      }
+      drawChart();
+      addLog('Simulation reset to initial state. Pipeline is ready for new defensive or adversarial scenarios.', 'info');
+    }
+
+    for (let i = 0; i < 12; i++) {
+      attackerSeries.push(0);
+      defenderSeries.push(0);
+    }
+    drawChart();
+    updateSocket([
+      { phase: 'Ready', source: 'none', destination: 'none', action: 'Awaiting trigger', status: 'IDLE', className: 'status-idle' }
+    ]);
+  </script>
+</body>
+</html>
