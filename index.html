@@ -212,6 +212,9 @@
     .tarpit-btn { background: linear-gradient(180deg, #8b5cf6, #7c3aed); }
     .deny-btn { background: linear-gradient(180deg, #64748b, #475569); }
     .reset-btn { background: linear-gradient(180deg, #1f2937, #111827); }
+    .secondary-btn {
+      background: linear-gradient(180deg, #0ea5e9, #0284c7);
+    }
 
     .metrics-grid {
       display: grid;
@@ -317,6 +320,53 @@
     .terminal-line.alert { color: #fca5a5; }
     .terminal-line.ok { color: #6ee7b7; }
     .terminal-line.info { color: #7dd3fc; }
+
+    .command-box,
+    .upload-box {
+      margin-top: 16px;
+      background: rgba(2, 6, 23, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .command-box code {
+      display: block;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #7dd3fc;
+      font-family: "Consolas", "Courier New", monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .command-row,
+    .upload-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .upload-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.8);
+      padding: 10px 12px;
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .upload-control input {
+      display: none;
+    }
 
     .concept-grid,
     .reference-section {
@@ -482,6 +532,25 @@
         <div class="terminal" id="terminal">
           <span class="terminal-line info">[system] Pipeline ready. Select an operation to begin the simulation.</span>
         </div>
+
+        <div class="upload-box">
+          <strong>Upload Your Own Log</strong>
+          <div class="upload-row">
+            <label class="upload-control">
+              <input id="logUpload" type="file" accept=".txt,.log,.csv" />
+              <span>Choose log file</span>
+            </label>
+            <button class="secondary-btn" type="button" onclick="loadSampleLog()">Use sample log</button>
+          </div>
+        </div>
+
+        <div class="command-box">
+          <strong>Run it for real</strong>
+          <div class="command-row">
+            <code id="runCommand">cd /path/to/this/repo && python3 -m http.server 8000</code>
+            <button class="secondary-btn" type="button" onclick="copyRunCommand()">Copy</button>
+          </div>
+        </div>
       </section>
     </div>
 
@@ -545,6 +614,7 @@
     const nodes = [...document.querySelectorAll('.node')];
     const canvas = document.getElementById('resourceChart');
     const ctx = canvas.getContext('2d');
+    const logUpload = document.getElementById('logUpload');
 
     const attackerSeries = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     const defenderSeries = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -735,6 +805,71 @@
       drawChart();
       addLog('Simulation reset to initial state. Pipeline is ready for new defensive or adversarial scenarios.', 'info');
     }
+
+    function loadSampleLog() {
+      const sample = [
+        '[system] Backdoor trigger observed. Payload staged from typo-arch-archive.com',
+        '[network] Outbound reverse shell handshake established: 192.168.1.150 -> 203.0.113.66:4444',
+        '[defense] DNS sinkhole applied. Domain redirected to 127.0.0.1',
+        '[monitor] TCP receive window clamped to zero. Listener is now idle and trapped',
+        '[system] Malicious script checked and denied by allowlist policy'
+      ];
+
+      terminal.innerHTML = '<span class="terminal-line info">[system] Loading custom sample log...</span>';
+      sample.forEach((line) => addLog(line, 'info'));
+      triggerBackdoor();
+      triggerReverseShell();
+      triggerSinkhole();
+      triggerTarpit();
+      triggerScriptDeny();
+      addLog('[system] Sample log replay complete. Everything is working as expected.', 'ok');
+    }
+
+    function copyRunCommand() {
+      const command = document.getElementById('runCommand').textContent;
+      navigator.clipboard.writeText(command)
+        .then(() => addLog('[system] Run command copied to the clipboard.', 'ok'))
+        .catch(() => addLog('[system] Clipboard access blocked by the browser; copy the command manually.', 'warn'));
+    }
+
+    function handleLogUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const text = String(e.target.result || '');
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(-50);
+
+        if (!lines.length) {
+          addLog('[system] Uploaded file was empty.', 'warn');
+          return;
+        }
+
+        terminal.innerHTML = '<span class="terminal-line info">[system] Imported user log file: ' + file.name + '</span>';
+        lines.forEach((line) => addLog(line, /sinkhole|deny|window|blocked|trapped|idle|zero/i.test(line) ? 'ok' : /error|warn|flood|exhaust|attack|malicious|alert/i.test(line) ? 'alert' : 'info'));
+
+        const combined = lines.join('\n').toLowerCase();
+        if (combined.includes('reverse shell') || combined.includes('c2') || combined.includes('established')) {
+          triggerReverseShell();
+        } else if (combined.includes('sinkhole') || combined.includes('redirect')) {
+          triggerSinkhole();
+        } else if (combined.includes('window') && combined.includes('zero')) {
+          triggerTarpit();
+        } else if (combined.includes('blocked') || combined.includes('deny')) {
+          triggerScriptDeny();
+        } else if (combined.includes('flood') || combined.includes('exhaust')) {
+          triggerDataFlood();
+        } else {
+          triggerBackdoor();
+        }
+
+        addLog('[system] Uploaded log replay complete. Visualization updated from the imported file.', 'ok');
+      };
+      reader.readAsText(file);
+    }
+
+    logUpload.addEventListener('change', handleLogUpload);
 
     for (let i = 0; i < 12; i++) {
       attackerSeries.push(0);
