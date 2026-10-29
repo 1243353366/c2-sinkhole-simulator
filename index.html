@@ -318,6 +318,7 @@
     .terminal-line.ok { color: #6ee7b7; }
     .terminal-line.info { color: #7dd3fc; }
 
+    .concept-grid,
     .reference-section {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -325,6 +326,7 @@
       margin-top: 18px;
     }
 
+    .concept-card,
     .ref-card {
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -332,12 +334,14 @@
       padding: 16px;
     }
 
+    .concept-card h3,
     .ref-card h3 {
       margin: 0 0 10px;
       font-size: 1rem;
       color: #f8fafc;
     }
 
+    .concept-card p,
     .ref-card p {
       margin: 0;
       color: var(--muted);
@@ -483,6 +487,23 @@
 
     <section class="panel">
       <h2>Security Reference</h2>
+
+      <div class="concept-grid">
+        <div class="concept-card">
+          <h3>1. Connection Direction vs. Data Flow</h3>
+          <p>The compromised host usually initiates the outbound TCP session to the attacker’s server. This is common because outbound traffic is often allowed while inbound access is blocked by NAT or firewall rules. Once the three-way handshake succeeds, the connection is bidirectional and full-duplex.</p>
+        </div>
+        <div class="concept-card">
+          <h3>2. What Flows Through the Pipe</h3>
+          <p>Attackers send commands such as whoami, ls, or shell invocations down the socket. The compromised system then sends stdout, stderr, terminal output, and command results back through the same channel. The initiation direction and the traffic direction are not the same thing.</p>
+        </div>
+      </div>
+
+      <div class="legal-box">
+        <h3>Can the Attacker’s Listener Be Exhausted?</h3>
+        <p>Yes, in defensive modeling, the connection can be used to pressure the attacker’s listener by sending high-volume junk output, repeated disconnect/reconnect churn, or other forms of resource exhaustion. This is a concept used in simulations of C2 exhaustion and listener saturation, not a real-world exploitation instruction. In real operations, mitigation must be performed only on authorized systems under strict policy and legal review.</p>
+      </div>
+
       <div class="reference-section">
         <div class="ref-card">
           <h3>TCP Window Clamping</h3>
